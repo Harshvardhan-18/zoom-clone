@@ -1,0 +1,132 @@
+/** Typed wrappers around the backend REST API. All functions throw on non-2xx. */
+
+const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
+
+async function req<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, options);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail ?? "Request failed");
+  }
+  // 204 No Content has no body
+  if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  avatar_color: string;
+  created_at: string;
+}
+
+export interface Meeting {
+  id: number;
+  meeting_code: string;
+  title: string;
+  description: string | null;
+  host_id: number;
+  type: "instant" | "scheduled";
+  status: "scheduled" | "live" | "ended";
+  start_time: string | null;
+  duration_minutes: number;
+  created_at: string;
+  started_at: string | null;
+  ended_at: string | null;
+}
+
+export interface Participant {
+  id: number;
+  meeting_id: number;
+  user_id: number | null;
+  display_name: string;
+  role: "host" | "participant";
+  is_muted: boolean;
+  is_video_on: boolean;
+  status: "joined" | "left" | "removed";
+  joined_at: string;
+  left_at: string | null;
+}
+
+// ── API calls ─────────────────────────────────────────────────────────────────
+
+export const getMe = () => req<User>("/api/me");
+
+export const updateMe = (body: { name?: string; email?: string }) =>
+  req<User>("/api/me", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+export const getUpcoming = () => req<Meeting[]>("/api/meetings/upcoming");
+
+export const getRecent = () => req<Meeting[]>("/api/meetings/recent");
+
+export const getMeeting = (code: string) =>
+  req<Meeting>(`/api/meetings/${code}`);
+
+export const createMeeting = (body: {
+  title?: string;
+  description?: string;
+  start_time?: string;
+  duration_minutes?: number;
+}) =>
+  req<Meeting>("/api/meetings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+export const deleteMeeting = (code: string, participantId: number) =>
+  req<void>(`/api/meetings/${code}`, {
+    method: "DELETE",
+    headers: { "x-participant-id": String(participantId) },
+  });
+
+export const joinMeeting = (
+  code: string,
+  body: { display_name: string; as_host?: boolean }
+) =>
+  req<Participant>(`/api/meetings/${code}/join`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+export const endMeeting = (code: string, participantId: number) =>
+  req<Meeting>(`/api/meetings/${code}/end`, {
+    method: "POST",
+    headers: { "x-participant-id": String(participantId) },
+  });
+
+export const muteAll = (code: string, participantId: number) =>
+  req<Participant[]>(`/api/meetings/${code}/mute-all`, {
+    method: "POST",
+    headers: { "x-participant-id": String(participantId) },
+  });
+
+export const listParticipants = (code: string) =>
+  req<Participant[]>(`/api/meetings/${code}/participants`);
+
+export const updateParticipant = (
+  id: number,
+  body: { is_muted?: boolean; is_video_on?: boolean }
+) =>
+  req<Participant>(`/api/participants/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+export const leaveParticipant = (id: number) =>
+  req<Participant>(`/api/participants/${id}/leave`, { method: "POST" });
+
+export const removeParticipant = (id: number, hostParticipantId: number) =>
+  req<void>(`/api/participants/${id}`, {
+    method: "DELETE",
+    headers: { "x-participant-id": String(hostParticipantId) },
+  });
