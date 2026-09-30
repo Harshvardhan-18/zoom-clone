@@ -37,7 +37,7 @@ export function useWebRTC(
   useEffect(() => {
     if (!code || !participantId) return;
 
-    const base = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
+    const base = (process.env.API_URL || "http://localhost:8000").replace(/\/+$/, "");
     const wsBase = base.replace(/^http/, "ws");
     const wsUrl = `${wsBase}/ws/${code}?pid=${participantId}`;
 

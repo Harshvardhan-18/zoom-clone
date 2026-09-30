@@ -220,7 +220,7 @@ FRONTEND_ORIGIN=http://localhost:3000
 
 **Frontend** (`.env.local`):
 ```
-NEXT_PUBLIC_API_URL=http://localhost:8000
+API_URL=http://localhost:8000
 ```
 
 ---
@@ -230,7 +230,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 ### Frontend → Vercel
 1. Push repo to GitHub
 2. Import in Vercel, set root dir to `frontend`
-3. Add env var: `NEXT_PUBLIC_API_URL=https://your-backend.onrender.com`
+3. Add env var: `API_URL=https://your-backend.onrender.com`
 
 ### Backend → Render
 1. New Web Service, root dir `backend`

@@ -1,6 +1,6 @@
 /** Typed wrappers around the backend REST API. All functions throw on non-2xx. */
 
-const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
+const BASE = (process.env.API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
 
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, options);

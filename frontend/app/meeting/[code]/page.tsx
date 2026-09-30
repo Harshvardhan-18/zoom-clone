@@ -137,7 +137,7 @@ export default function MeetingRoomPage() {
   useEffect(() => {
     const handleUnload = () => {
       if (!participantId || leavingRef.current) return;
-      const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+      const base = process.env.API_URL ?? "http://localhost:8000";
       navigator.sendBeacon(`${base}/api/participants/${participantId}/leave`);
     };
     window.addEventListener("beforeunload", handleUnload);
