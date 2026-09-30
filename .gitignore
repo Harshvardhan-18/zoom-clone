@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+venv/
+__pycache__/
+*.pyc
+
+# Builds
+.next/
+dist/
+build/
+
+# Database & Environment
+*.db
+.env*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db

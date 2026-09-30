@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: zoom-clone-backend
+    env: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: FRONTEND_ORIGIN
+        sync: false
+        # Set to your Vercel URL, e.g. https://zoom-clone.vercel.app
