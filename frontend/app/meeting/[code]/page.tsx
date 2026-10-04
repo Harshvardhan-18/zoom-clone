@@ -21,7 +21,7 @@ import {
   type Meeting,
   type Participant,
 } from "@/lib/api";
-import { formatMeetingId, inviteLink, formatElapsed, cn } from "@/lib/utils";
+import { formatMeetingId, inviteLink, cn } from "@/lib/utils";
 import { useWebRTC } from "@/lib/use-webrtc";
 
 function getGridClass(count: number): string {
@@ -49,7 +49,6 @@ export default function MeetingRoomPage() {
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
   const [stream, setStream] = useState<MediaStream | null>(null);
 
   // WebRTC mesh: exchange audio/video peer-to-peer
@@ -78,12 +77,6 @@ export default function MeetingRoomPage() {
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
-  }, []);
-
-  // Elapsed timer ticking every 1s
-  useEffect(() => {
-    const id = setInterval(() => setElapsed((e) => e + 1), 1000);
-    return () => clearInterval(id);
   }, []);
 
   // Polling every 2s
@@ -232,11 +225,6 @@ export default function MeetingRoomPage() {
             </div>
           </PopoverContent>
         </Popover>
-
-        {/* Right: Elapsed timer */}
-        <div className="text-white/70 font-mono text-sm tabular-nums shrink-0">
-          {formatElapsed(elapsed)}
-        </div>
       </header>
 
       {/* Main Body */}
