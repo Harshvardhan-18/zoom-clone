@@ -2,14 +2,15 @@
 
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException
+
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from app.database import engine, SessionLocal, Base, get_db
-from app.seed import seed_if_empty, DEFAULT_USER_ID
-from app.routers import meetings, participants, signal
 from app import models, schemas
+from app.database import Base, SessionLocal, engine, get_db
+from app.routers import meetings, participants, signal
+from app.seed import DEFAULT_USER_ID, seed_if_empty
 
 
 @asynccontextmanager
@@ -48,6 +49,7 @@ app.add_middleware(
 def health_check():
     """Health check endpoint for Render/uptime monitors."""
     return {"status": "ok", "app": "Zoom Clone API"}
+
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(meetings.router)

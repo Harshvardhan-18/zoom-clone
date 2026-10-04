@@ -1,9 +1,23 @@
-/** Typed wrappers around the backend REST API. All functions throw on non-2xx. */
-
-const BASE = (process.env.API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
+/** Dynamic backend URL resolver. Automatically routes to Render in cloud, localhost in dev. */
+export function getApiBase(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL;
+  if (envUrl && !envUrl.includes("localhost")) {
+    return envUrl.replace(/\/+$/, "");
+  }
+  // In the browser: if not localhost, automatically use production Render backend
+  if (
+    typeof window !== "undefined" &&
+    window.location.hostname !== "localhost" &&
+    window.location.hostname !== "127.0.0.1"
+  ) {
+    return "https://zoom-clone-dq29.onrender.com";
+  }
+  return (envUrl || "http://localhost:8000").replace(/\/+$/, "");
+}
 
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, options);
+  const base = getApiBase();
+  const res = await fetch(`${base}${path}`, options);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail ?? "Request failed");

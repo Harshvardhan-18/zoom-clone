@@ -26,9 +26,10 @@ import { useWebRTC } from "@/lib/use-webrtc";
 
 function getGridClass(count: number): string {
   if (count <= 1) return "grid-cols-1 grid-rows-1";
-  if (count === 2) return "grid-cols-1 md:grid-cols-2 grid-rows-2 md:grid-rows-1";
+  if (count === 2) return "grid-cols-1 grid-rows-2 sm:grid-cols-2 sm:grid-rows-1";
   if (count <= 4) return "grid-cols-2 grid-rows-2";
-  return "grid-cols-2 md:grid-cols-3 auto-rows-fr";
+  if (count <= 6) return "grid-cols-2 sm:grid-cols-3 auto-rows-fr";
+  return "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 auto-rows-fr";
 }
 
 export default function MeetingRoomPage() {
@@ -188,25 +189,25 @@ export default function MeetingRoomPage() {
   const link = inviteLink(code);
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#0F0F0F] text-white overflow-hidden select-none">
+    <div className="h-[100dvh] w-screen flex flex-col bg-[#0F0F0F] text-white overflow-hidden select-none">
       {/* Dark theme sonner toasts for room */}
-      <Toaster theme="dark" position="top-right" richColors />
+      <Toaster theme="dark" position="top-center" richColors />
 
-      {/* Top bar (h-12, bg #0F0F0F) */}
-      <header className="h-12 bg-[#0F0F0F] flex items-center justify-between px-4 shrink-0 border-b border-white/5 z-10">
+      {/* Top bar */}
+      <header className="h-12 bg-[#0F0F0F] flex items-center justify-between px-3 sm:px-4 shrink-0 border-b border-white/5 z-10">
         {/* Left: Info pill with meeting title */}
         <Popover>
           <PopoverTrigger asChild>
-            <button className="bg-white/10 hover:bg-white/15 text-white rounded-full px-3 py-1 flex items-center gap-2 text-sm font-semibold cursor-pointer transition-colors">
-              <Info size={16} />
-              <span className="truncate max-w-[200px] sm:max-w-[400px]">
+            <button className="bg-white/10 hover:bg-white/15 text-white rounded-full px-2.5 py-1 flex items-center gap-1.5 text-sm font-semibold cursor-pointer transition-colors max-w-[180px] sm:max-w-[400px]">
+              <Info size={15} className="shrink-0" />
+              <span className="truncate">
                 {meeting?.title || "Meeting"}
               </span>
             </button>
           </PopoverTrigger>
           <PopoverContent
             align="start"
-            className="bg-[#242424] border border-white/10 text-white rounded-xl p-4 w-80 shadow-2xl"
+            className="bg-[#242424] border border-white/10 text-white rounded-xl p-4 w-[min(320px,calc(100vw-24px))] shadow-2xl"
           >
             <p className="text-xs text-[#6E6E85] mb-1 font-medium">Meeting ID</p>
             <p className="text-base font-semibold text-white font-mono tracking-wide mb-3">
@@ -232,16 +233,16 @@ export default function MeetingRoomPage() {
           </PopoverContent>
         </Popover>
 
-        {/* Right: Elapsed timer (00:12:41) */}
-        <div className="text-white/70 font-mono text-sm tabular-nums">
+        {/* Right: Elapsed timer */}
+        <div className="text-white/70 font-mono text-sm tabular-nums shrink-0">
           {formatElapsed(elapsed)}
         </div>
       </header>
 
-      {/* Main Body: Stage (shrinks when participants panel is open) + Docked Participants Panel */}
-      <div className="flex-1 flex overflow-hidden relative">
+      {/* Main Body */}
+      <div className="flex-1 flex overflow-hidden relative min-h-0">
         {/* Stage */}
-        <main className="flex-1 min-w-0 h-full p-1 sm:p-2 bg-[#0F0F0F] flex items-center justify-center overflow-hidden">
+        <main className="flex-1 min-w-0 min-h-0 p-1 sm:p-2 bg-[#0F0F0F] flex items-center justify-center overflow-hidden">
           <div
             className={cn(
               "grid gap-1 w-full h-full max-h-full",

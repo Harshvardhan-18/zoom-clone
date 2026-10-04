@@ -72,9 +72,19 @@ export default function ParticipantsPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-20 md:static md:w-[340px] md:my-2 md:mr-2 md:h-[calc(100%-16px)] bg-[#242424] rounded-xl flex flex-col shrink-0 overflow-hidden border border-white/5 select-none shadow-2xl">
-      {/* Header: Participants (n) centered with X close button */}
-      <div className="h-12 px-4 flex items-center justify-between border-b border-white/5 shrink-0">
+    <>
+      {/* Mobile: backdrop */}
+      <div
+        className="fixed inset-0 bg-black/60 z-20 md:hidden"
+        onClick={onClose}
+      />
+      {/* Panel: bottom-sheet on mobile, right-docked on desktop */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 rounded-t-2xl md:rounded-xl md:static md:w-[320px] md:my-2 md:mr-2 md:h-[calc(100%-16px)] md:z-auto bg-[#242424] flex flex-col shrink-0 overflow-hidden border border-white/5 select-none shadow-2xl max-h-[80vh] md:max-h-none">
+        {/* Mobile drag handle */}
+        <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mt-2.5 mb-1 md:hidden shrink-0" />
+
+        {/* Header: Participants (n) centered with X close button */}
+        <div className="h-11 md:h-12 px-4 flex items-center justify-between border-b border-white/5 shrink-0">
         <div className="w-7" />
         <h3 className="text-base font-medium text-white text-center flex-1">
           Participants ({participants.length})
@@ -198,5 +208,6 @@ export default function ParticipantsPanel({
         )}
       </div>
     </div>
+    </>
   );
 }

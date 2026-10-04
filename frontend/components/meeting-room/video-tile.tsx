@@ -47,18 +47,18 @@ export default function VideoTile({ participant, isSelf, stream }: VideoTileProp
       {!hasVideo && (
         <div
           style={{ backgroundColor: avatarBg }}
-          className="w-28 h-28 sm:w-36 sm:h-36 rounded-none text-white flex items-center justify-center text-5xl sm:text-6xl md:text-7xl font-medium select-none shadow-sm"
+          className="w-16 h-16 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-lg text-white flex items-center justify-center text-3xl sm:text-4xl md:text-6xl font-medium select-none shadow-sm"
         >
           {initial}
         </div>
       )}
 
       {/* Name tag at bottom-left */}
-      <div className="absolute bottom-2 left-2 bg-black/50 rounded px-2 py-1 flex items-center gap-1.5 z-10">
+      <div className="absolute bottom-1.5 left-1.5 sm:bottom-2 sm:left-2 bg-black/60 rounded px-1.5 py-0.5 sm:px-2 sm:py-1 flex items-center gap-1 z-10 max-w-[80%]">
         {participant.is_muted && (
-          <MicOff size={14} className="text-[#E5484D] shrink-0" />
+          <MicOff size={11} className="text-[#E5484D] shrink-0" />
         )}
-        <span className="text-[15px] text-white font-normal leading-tight truncate max-w-[200px]">
+        <span className="text-[11px] sm:text-[13px] text-white font-normal leading-tight truncate">
           {participant.display_name}
         </span>
       </div>
