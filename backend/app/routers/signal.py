@@ -5,6 +5,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query, s
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models
+from app.utils import normalize_code
 
 router = APIRouter(tags=["webrtc"])
 
@@ -14,8 +15,9 @@ rooms: dict[str, dict[int, WebSocket]] = {}
 
 def close_participant_socket(code: str, pid: int):
     """Close and remove a specific participant's socket (e.g. on host removal)."""
-    if code in rooms and pid in rooms[code]:
-        ws = rooms[code].pop(pid, None)
+    room_code = normalize_code(code)
+    if room_code in rooms and pid in rooms[room_code]:
+        ws = rooms[room_code].pop(pid, None)
         if ws:
             try:
                 loop = asyncio.get_event_loop()
@@ -27,8 +29,9 @@ def close_participant_socket(code: str, pid: int):
 
 def close_room(code: str):
     """Close all participant sockets in a meeting room (e.g. on host end)."""
-    if code in rooms:
-        target_ws_list = list(rooms.pop(code, {}).values())
+    room_code = normalize_code(code)
+    if room_code in rooms:
+        target_ws_list = list(rooms.pop(room_code, {}).values())
         for ws in target_ws_list:
             try:
                 loop = asyncio.get_event_loop()
@@ -46,8 +49,9 @@ async def websocket_signaling(
     db: Session = Depends(get_db),
 ):
     """Signaling endpoint for exchanging SDP offers, answers and ICE candidates."""
+    room_code = normalize_code(code)
     # Validate participant belongs to meeting and is status=joined
-    meeting = db.query(models.Meeting).filter_by(meeting_code=code).first()
+    meeting = db.query(models.Meeting).filter_by(meeting_code=room_code).first()
     if not meeting:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
@@ -63,15 +67,15 @@ async def websocket_signaling(
 
     await websocket.accept()
 
-    if code not in rooms:
-        rooms[code] = {}
+    if room_code not in rooms:
+        rooms[room_code] = {}
 
     # Send existing peer IDs to the newly connected participant
-    existing_ids = list(rooms[code].keys())
+    existing_ids = list(rooms[room_code].keys())
     await websocket.send_json({"type": "peers", "ids": existing_ids})
 
     # Register socket
-    rooms[code][pid] = websocket
+    rooms[room_code][pid] = websocket
 
     try:
         while True:
@@ -81,8 +85,8 @@ async def websocket_signaling(
             data = msg.get("data")
 
             # Forward message to recipient as from sender
-            if target_id and code in rooms and target_id in rooms[code]:
-                target_ws = rooms[code][target_id]
+            if target_id and room_code in rooms and target_id in rooms[room_code]:
+                target_ws = rooms[room_code][target_id]
                 await target_ws.send_json({
                     "from": pid,
                     "type": msg_type,
@@ -94,13 +98,13 @@ async def websocket_signaling(
         pass
     finally:
         # Cleanup on disconnect
-        if code in rooms and pid in rooms[code]:
-            del rooms[code][pid]
-            if not rooms[code]:
-                del rooms[code]
+        if room_code in rooms and pid in rooms[room_code]:
+            del rooms[room_code][pid]
+            if not rooms[room_code]:
+                del rooms[room_code]
             else:
                 # Notify remaining peers that this participant left
-                for ws in list(rooms[code].values()):
+                for ws in list(rooms[room_code].values()):
                     try:
                         await ws.send_json({"type": "left", "id": pid})
                     except Exception:

@@ -19,10 +19,14 @@ export default function VideoTile({ participant, isSelf, stream }: VideoTileProp
 
   // Attach stream to video element whenever stream changes
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
+    if (videoRef.current) {
+      videoRef.current.muted = isSelf;
+      if (stream) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
     }
-  }, [stream]);
+  }, [stream, isSelf]);
 
   const hasVideo = !!stream && participant.is_video_on;
 
@@ -38,7 +42,7 @@ export default function VideoTile({ participant, isSelf, stream }: VideoTileProp
           className={cn(
             "w-full h-full object-cover",
             isSelf && "transform -scale-x-100",
-            !hasVideo && "hidden"
+            !hasVideo && "opacity-0 absolute inset-0 pointer-events-none"
           )}
         />
       )}

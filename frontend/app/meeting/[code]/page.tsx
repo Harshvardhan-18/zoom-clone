@@ -18,6 +18,7 @@ import {
   updateParticipant,
   leaveParticipant,
   endMeeting,
+  getApiBase,
   type Meeting,
   type Participant,
 } from "@/lib/api";
@@ -66,15 +67,44 @@ export default function MeetingRoomPage() {
 
   // Acquire local media
   useEffect(() => {
-    navigator.mediaDevices
-      ?.getUserMedia({ video: true, audio: true })
-      .then((s) => {
+    let active = true;
+
+    async function initMedia() {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+        if (!active) {
+          s.getTracks().forEach((t) => t.stop());
+          return;
+        }
         streamRef.current = s;
         setStream(s);
-      })
-      .catch(() => {});
+      } catch (err) {
+        console.warn("Could not acquire video and audio together, trying audio only:", err);
+        try {
+          const s = await navigator.mediaDevices.getUserMedia({
+            video: false,
+            audio: true,
+          });
+          if (!active) {
+            s.getTracks().forEach((t) => t.stop());
+            return;
+          }
+          streamRef.current = s;
+          setStream(s);
+          setCamOn(false);
+        } catch (err2) {
+          console.warn("Could not acquire audio either:", err2);
+        }
+      }
+    }
+
+    initMedia();
 
     return () => {
+      active = false;
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
@@ -131,7 +161,7 @@ export default function MeetingRoomPage() {
   useEffect(() => {
     const handleUnload = () => {
       if (!participantId || leavingRef.current) return;
-      const base = process.env.API_URL ?? "http://localhost:8000";
+      const base = getApiBase();
       navigator.sendBeacon(`${base}/api/participants/${participantId}/leave`);
     };
     window.addEventListener("beforeunload", handleUnload);
