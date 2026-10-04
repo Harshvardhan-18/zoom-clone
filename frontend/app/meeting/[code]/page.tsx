@@ -52,11 +52,20 @@ export default function MeetingRoomPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
 
-  // WebRTC mesh: exchange audio/video peer-to-peer
-  const remoteStreams = useWebRTC(code, participantId, stream);
-
   const streamRef = useRef<MediaStream | null>(null);
   const leavingRef = useRef(false);
+
+  const handleRemoved = useCallback(() => {
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    sessionStorage.removeItem(`participant:${code}`);
+    toast.error("You were removed by the host");
+    router.push("/");
+  }, [code, router]);
+
+  // WebRTC mesh: exchange audio/video peer-to-peer
+  const remoteStreams = useWebRTC(code, participantId, stream, handleRemoved);
 
   // Redirect to pre-join if no participant ID
   useEffect(() => {
@@ -121,21 +130,19 @@ export default function MeetingRoomPage() {
       setParticipants(parts);
 
       const me = parts.find((p) => p.id === participantId);
-      if (me) setSelf(me);
 
-      // Kicked by host?
-      if (me?.status === "removed") {
-        leavingRef.current = true;
-        streamRef.current?.getTracks().forEach((t) => t.stop());
-        toast.error("You were removed by the host");
-        router.push("/");
+      // Kicked by host? (missing from joined list or marked removed)
+      if (!me || me.status === "removed") {
+        handleRemoved();
         return;
       }
+      setSelf(me);
 
       // Meeting ended?
       if (m.status === "ended") {
         leavingRef.current = true;
         streamRef.current?.getTracks().forEach((t) => t.stop());
+        sessionStorage.removeItem(`participant:${code}`);
         toast.info("The host ended this meeting");
         router.push("/");
         return;
@@ -149,7 +156,7 @@ export default function MeetingRoomPage() {
     } catch {
       // Ignore transient network errors
     }
-  }, [code, participantId, micOn, router]);
+  }, [code, participantId, micOn, router, handleRemoved]);
 
   useEffect(() => {
     poll();

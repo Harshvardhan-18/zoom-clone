@@ -22,7 +22,13 @@ def close_participant_socket(code: str, pid: int):
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
-                    loop.create_task(ws.close(code=status.WS_1000_NORMAL_CLOSURE))
+                    async def notify_and_close():
+                        try:
+                            await ws.send_json({"type": "removed"})
+                            await ws.close(code=status.WS_1000_NORMAL_CLOSURE)
+                        except Exception:
+                            pass
+                    loop.create_task(notify_and_close())
             except Exception:
                 pass
 

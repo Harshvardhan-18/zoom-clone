@@ -16,7 +16,8 @@ const ICE_SERVERS = [
 export function useWebRTC(
   code: string,
   participantId: number,
-  localStream: MediaStream | null
+  localStream: MediaStream | null,
+  onRemoved?: () => void
 ) {
   const [remoteStreams, setRemoteStreams] = useState<Record<number, MediaStream>>({});
   const pcsRef = useRef<Map<number, RTCPeerConnection>>(new Map());
@@ -181,6 +182,11 @@ export function useWebRTC(
             delete next[peerId];
             return next;
           });
+        }
+
+        // 6. Kicked / removed by host
+        if (msg.type === "removed") {
+          onRemoved?.();
         }
       } catch (err) {
         console.error("WebRTC signaling error:", err);
