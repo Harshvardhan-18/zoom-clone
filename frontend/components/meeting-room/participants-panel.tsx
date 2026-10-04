@@ -1,7 +1,6 @@
 "use client";
 
 import { X, Mic, MicOff, Video, VideoOff, MoreHorizontal } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -79,33 +78,38 @@ export default function ParticipantsPanel({
         onClick={onClose}
       />
       {/* Panel: bottom-sheet on mobile, right-docked on desktop */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 rounded-t-2xl md:rounded-xl md:static md:w-[320px] md:my-2 md:mr-2 md:h-[calc(100%-16px)] md:z-auto bg-[#242424] flex flex-col shrink-0 overflow-hidden border border-white/5 select-none shadow-2xl max-h-[80vh] md:max-h-none">
+      <div className="fixed bottom-0 left-0 right-0 z-30 rounded-t-2xl md:rounded-xl md:static md:w-[340px] lg:w-[360px] md:my-2 md:mr-2 md:h-[calc(100%-16px)] md:z-auto bg-[#242424] flex flex-col shrink-0 overflow-hidden border border-white/5 select-none shadow-2xl max-h-[80vh] md:max-h-none">
         {/* Mobile drag handle */}
         <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mt-2.5 mb-1 md:hidden shrink-0" />
 
         {/* Header: Participants (n) centered with X close button */}
         <div className="h-11 md:h-12 px-4 flex items-center justify-between border-b border-white/5 shrink-0">
-        <div className="w-7" />
-        <h3 className="text-base font-medium text-white text-center flex-1">
-          Participants ({participants.length})
-        </h3>
-        <button
-          onClick={onClose}
-          className="p-1 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-          aria-label="Close participants panel"
-        >
-          <X size={18} />
-        </button>
-      </div>
+          <div className="w-7" />
+          <h3 className="text-base font-medium text-white text-center flex-1">
+            Participants ({participants.length})
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            aria-label="Close participants panel"
+          >
+            <X size={18} />
+          </button>
+        </div>
 
-      {/* Participant List */}
-      <ScrollArea className="flex-1 overflow-y-auto px-2 py-3">
-        <div className="space-y-1">
+        {/* Participant List (native scrollable container without table overflow bugs) */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 sm:px-3 py-2 space-y-1 min-h-0 w-full">
           {participants.map((p) => {
             const isSelf = p.id === selfId;
             const isParticipantHost = p.role === "host";
             const avatarBg = getAvatarColor(p.display_name, isParticipantHost);
             const initial = getInitial(p.display_name);
+
+            // Strip existing trailing (Host), (Guest), (Me) to prevent duplicate suffixes like "(Host) (Host)"
+            const rawName = p.display_name || "Guest";
+            const cleanName =
+              rawName.replace(/\s*\((Host|Guest|Me)(,\s*me)?\)\s*$/i, "").trim() ||
+              rawName;
 
             let suffix = "";
             if (isParticipantHost && isSelf) {
@@ -119,35 +123,38 @@ export default function ParticipantsPanel({
             return (
               <div
                 key={p.id}
-                className="flex items-center gap-3 px-3 py-2 hover:bg-white/5 rounded-lg transition-colors"
+                className="flex items-center justify-between gap-2 px-2.5 py-2 hover:bg-white/5 rounded-lg transition-colors w-full"
               >
-                {/* 40px square-rounded avatar */}
-                <div
-                  style={{ backgroundColor: avatarBg }}
-                  className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center text-white font-medium text-base select-none shadow-xs"
-                >
-                  {initial}
-                </div>
+                {/* Left: Avatar + Name with truncate */}
+                <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-1">
+                  <div
+                    style={{ backgroundColor: avatarBg }}
+                    className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center text-white font-medium text-sm select-none shadow-xs"
+                  >
+                    {initial}
+                  </div>
 
-                {/* Name */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-[15px] text-white truncate leading-tight">
-                    {p.display_name}
-                    {suffix}
+                  <p className="text-[14px] text-white truncate leading-tight">
+                    {cleanName}
+                    {suffix && (
+                      <span className="text-white/60 text-xs font-normal">
+                        {suffix}
+                      </span>
+                    )}
                   </p>
                 </div>
 
-                {/* Audio / Video status */}
-                <div className="flex items-center gap-2 shrink-0">
+                {/* Right: Audio / Video status (strictly shrink-0, always fully visible inside card) */}
+                <div className="flex items-center gap-2 shrink-0 ml-auto pr-1">
                   {p.is_muted ? (
-                    <MicOff size={16} className="text-[#E5484D]" />
+                    <MicOff size={16} className="text-[#E5484D] shrink-0" />
                   ) : (
-                    <Mic size={16} className="text-white/40" />
+                    <Mic size={16} className="text-white/40 shrink-0" />
                   )}
                   {p.is_video_on ? (
-                    <Video size={16} className="text-white/40" />
+                    <Video size={16} className="text-white/40 shrink-0" />
                   ) : (
-                    <VideoOff size={16} className="text-[#E5484D]" />
+                    <VideoOff size={16} className="text-[#E5484D] shrink-0" />
                   )}
 
                   {/* Host actions on other participants */}
@@ -155,7 +162,7 @@ export default function ParticipantsPanel({
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
-                          className="p-1 rounded text-white/50 hover:text-white hover:bg-white/10 cursor-pointer"
+                          className="p-1 rounded text-white/50 hover:text-white hover:bg-white/10 cursor-pointer shrink-0"
                           aria-label={`Options for ${p.display_name}`}
                         >
                           <MoreHorizontal size={16} />
@@ -185,7 +192,6 @@ export default function ParticipantsPanel({
             );
           })}
         </div>
-      </ScrollArea>
 
       {/* Footer: Pill buttons (rounded-full, bg #333, h-9, px-4, 14px) */}
       <div className="p-3 border-t border-white/5 flex items-center justify-between gap-3 shrink-0">
