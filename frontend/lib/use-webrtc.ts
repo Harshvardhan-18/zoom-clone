@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { getApiBase } from "./api";
 
 const ICE_SERVERS = [
@@ -25,22 +25,106 @@ export function useWebRTC(
   const wsRef = useRef<WebSocket | null>(null);
   const localStreamRef = useRef<MediaStream | null>(localStream);
   const iceQueuesRef = useRef<Map<number, RTCIceCandidateInit[]>>(new Map());
+  const pendingPeerIdsRef = useRef<number[]>([]);
 
-  // Keep local stream ref in sync and add tracks if acquired after connection
+  // Keep local stream ref in sync
   useEffect(() => {
     localStreamRef.current = localStream;
-    if (localStream) {
-      pcsRef.current.forEach((pc) => {
-        const senders = pc.getSenders();
-        localStream.getTracks().forEach((track) => {
-          const alreadyAdded = senders.some((s) => s.track?.kind === track.kind);
-          if (!alreadyAdded) {
-            pc.addTrack(track, localStream);
-          }
-        });
+  }, [localStream]);
+
+  // When localStream becomes available, add tracks to any already-created PCs
+  // AND process any peers that arrived before the stream was ready
+  useEffect(() => {
+    if (!localStream) return;
+
+    // Add tracks to existing peer connections that don't have them yet
+    pcsRef.current.forEach((pc) => {
+      const senders = pc.getSenders();
+      localStream.getTracks().forEach((track) => {
+        const alreadyAdded = senders.some((s) => s.track?.kind === track.kind);
+        if (!alreadyAdded) {
+          pc.addTrack(track, localStream);
+        }
       });
+    });
+
+    // Process peers that joined before stream was ready (re-negotiate)
+    const pending = pendingPeerIdsRef.current.splice(0);
+    for (const peerId of pending) {
+      const pc = pcsRef.current.get(peerId);
+      if (pc && wsRef.current?.readyState === WebSocket.OPEN) {
+        pc.createOffer()
+          .then((offer) => pc.setLocalDescription(offer).then(() => offer))
+          .then((offer) => {
+            wsRef.current?.send(
+              JSON.stringify({ to: peerId, type: "offer", data: offer })
+            );
+          })
+          .catch(() => {});
+      }
     }
   }, [localStream]);
+
+  const createPCCallback = useCallback(
+    (ws: WebSocket) =>
+      (peerId: number): RTCPeerConnection => {
+        // Close any old PC for this peer
+        const existing = pcsRef.current.get(peerId);
+        if (existing) {
+          existing.close();
+        }
+
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        pcsRef.current.set(peerId, pc);
+
+        // Add local tracks if stream is ready
+        const stream = localStreamRef.current;
+        if (stream) {
+          stream.getTracks().forEach((track) => {
+            pc.addTrack(track, stream);
+          });
+        }
+
+        // When we receive remote tracks, store the stream
+        pc.ontrack = (event) => {
+          const incomingStream = event.streams[0];
+          if (incomingStream) {
+            setRemoteStreams((prev) => ({ ...prev, [peerId]: incomingStream }));
+          } else {
+            // Fallback: build stream manually from track
+            setRemoteStreams((prev) => {
+              const existing = prev[peerId] || new MediaStream();
+              if (!existing.getTracks().some((t) => t.id === event.track.id)) {
+                existing.addTrack(event.track);
+              }
+              return { ...prev, [peerId]: existing };
+            });
+          }
+        };
+
+        pc.onicecandidate = (event) => {
+          if (event.candidate && ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify({
+                to: peerId,
+                type: "ice",
+                data: event.candidate,
+              })
+            );
+          }
+        };
+
+        pc.onconnectionstatechange = () => {
+          if (pc.connectionState === "failed") {
+            // Attempt ICE restart on failure
+            pc.restartIce();
+          }
+        };
+
+        return pc;
+      },
+    []
+  );
 
   useEffect(() => {
     if (!code || !participantId) return;
@@ -52,61 +136,21 @@ export function useWebRTC(
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
-
-    function createPC(peerId: number): RTCPeerConnection {
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-      pcsRef.current.set(peerId, pc);
-
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((track) => {
-          pc.addTrack(track, localStreamRef.current!);
-        });
-      }
-
-      pc.ontrack = (event) => {
-        setRemoteStreams((prev) => {
-          let remote = prev[peerId];
-          if (!remote) {
-            remote = event.streams[0] || new MediaStream();
-          }
-          if (event.track && !remote.getTracks().some((t) => t.id === event.track.id)) {
-            remote.addTrack(event.track);
-          }
-          return {
-            ...prev,
-            [peerId]: remote,
-          };
-        });
-      };
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate && ws.readyState === WebSocket.OPEN) {
-          ws.send(
-            JSON.stringify({
-              to: peerId,
-              type: "ice",
-              data: event.candidate,
-            })
-          );
-        }
-      };
-
-      return pc;
-    }
+    const createPC = createPCCallback(ws);
 
     async function drainIceQueue(peerId: number, pc: RTCPeerConnection) {
       const queue = iceQueuesRef.current.get(peerId) || [];
+      iceQueuesRef.current.delete(peerId);
       for (const cand of queue) {
         await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
       }
-      iceQueuesRef.current.delete(peerId);
     }
 
     ws.onmessage = async (event) => {
       try {
         const msg = JSON.parse(event.data);
 
-        // 1. Initial peers list: We are the new joiner -> create PCs and send offers
+        // 1. Initial peers list: We are the new joiner → create PCs and send offers
         if (msg.type === "peers" && Array.isArray(msg.ids)) {
           for (const peerId of msg.ids) {
             const pc = createPC(peerId);
@@ -114,17 +158,18 @@ export function useWebRTC(
             await pc.setLocalDescription(offer);
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(
-                JSON.stringify({
-                  to: peerId,
-                  type: "offer",
-                  data: offer,
-                })
+                JSON.stringify({ to: peerId, type: "offer", data: offer })
               );
+            }
+
+            // If stream wasn't ready yet, queue this peer for re-negotiation
+            if (!localStreamRef.current) {
+              pendingPeerIdsRef.current.push(peerId);
             }
           }
         }
 
-        // 2. Incoming offer: Existing peer receives offer from new joiner -> answer
+        // 2. Incoming offer: Existing peer receives offer from new joiner → answer
         if (msg.type === "offer" && msg.from) {
           const peerId = msg.from;
           let pc = pcsRef.current.get(peerId);
@@ -137,11 +182,7 @@ export function useWebRTC(
           await pc.setLocalDescription(answer);
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(
-              JSON.stringify({
-                to: peerId,
-                type: "answer",
-                data: answer,
-              })
+              JSON.stringify({ to: peerId, type: "answer", data: answer })
             );
           }
         }
@@ -160,9 +201,10 @@ export function useWebRTC(
         if (msg.type === "ice" && msg.from) {
           const peerId = msg.from;
           const pc = pcsRef.current.get(peerId);
-          if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+          if (pc && pc.remoteDescription?.type) {
             await pc.addIceCandidate(new RTCIceCandidate(msg.data)).catch(() => {});
           } else {
+            // Queue until remote description is set
             const q = iceQueuesRef.current.get(peerId) || [];
             q.push(msg.data);
             iceQueuesRef.current.set(peerId, q);
@@ -199,17 +241,22 @@ export function useWebRTC(
       }
     };
 
+    ws.onerror = (err) => {
+      console.error("WebSocket error:", err);
+    };
+
     return () => {
       pcsRef.current.forEach((pc) => pc.close());
       pcsRef.current.clear();
       iceQueuesRef.current.clear();
+      pendingPeerIdsRef.current = [];
       setRemoteStreams({});
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
         ws.close();
       }
       wsRef.current = null;
     };
-  }, [code, participantId, !!localStream]);
+  }, [code, participantId, createPCCallback]);
 
   return remoteStreams;
 }

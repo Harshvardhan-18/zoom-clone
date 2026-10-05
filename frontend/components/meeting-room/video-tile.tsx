@@ -17,14 +17,27 @@ export default function VideoTile({ participant, isSelf, stream }: VideoTileProp
   const avatarBg = getAvatarColor(participant.display_name, isHost);
   const initial = getInitial(participant.display_name);
 
-  // Attach stream to video element whenever stream changes
+  // Attach / detach stream whenever it changes
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.muted = isSelf;
-      if (stream) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(() => {});
+    const el = videoRef.current;
+    if (!el) return;
+
+    el.muted = isSelf; // Self must be muted to avoid echo feedback
+
+    if (stream) {
+      // Only reassign if the stream object changed (avoid flicker on re-renders)
+      if (el.srcObject !== stream) {
+        el.srcObject = stream;
       }
+      el.play().catch(() => {
+        // Autoplay blocked — attempt unmuted play for remote peers
+        if (!isSelf) {
+          el.muted = true;
+          el.play().catch(() => {});
+        }
+      });
+    } else {
+      el.srcObject = null;
     }
   }, [stream, isSelf]);
 
@@ -32,22 +45,20 @@ export default function VideoTile({ participant, isSelf, stream }: VideoTileProp
 
   return (
     <div className="relative rounded-sm overflow-hidden bg-[#202020] w-full h-full flex items-center justify-center select-none">
-      {/* Video element: in DOM if stream exists so remote audio continues playing even if video is off */}
-      {stream && (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={isSelf} // Self must be muted to avoid feedback echo
-          className={cn(
-            "w-full h-full object-cover",
-            isSelf && "transform -scale-x-100",
-            !hasVideo && "opacity-0 absolute inset-0 pointer-events-none"
-          )}
-        />
-      )}
+      {/* Video element: always in DOM when stream exists so audio keeps playing even if video is off */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted={isSelf}
+        className={cn(
+          "w-full h-full object-cover",
+          isSelf && "transform -scale-x-100",
+          (!stream || !hasVideo) && "opacity-0 absolute inset-0 pointer-events-none"
+        )}
+      />
 
-      {/* Center: Square initial avatar when video is off */}
+      {/* Center: Square initial avatar when video is off or no stream */}
       {!hasVideo && (
         <div
           style={{ backgroundColor: avatarBg }}

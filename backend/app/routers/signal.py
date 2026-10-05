@@ -75,31 +75,52 @@ async def websocket_signaling(
 ):
     """Signaling endpoint for exchanging SDP offers, answers and ICE candidates."""
     room_code = normalize_code(code)
-    # Validate participant belongs to meeting and is status=joined
+
+    # Validate: meeting must exist
     meeting = db.query(models.Meeting).filter_by(meeting_code=room_code).first()
     if not meeting:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
+    # Validate: participant must exist and belong to this meeting
+    # Accept both 'joined' and 'left' — a page refresh after reconnect may briefly show 'left'
     participant = (
         db.query(models.Participant)
-        .filter_by(id=pid, meeting_id=meeting.id, status=models.ParticipantStatus.joined)
+        .filter_by(id=pid, meeting_id=meeting.id)
         .first()
     )
-    if not participant:
+    if not participant or participant.status == models.ParticipantStatus.removed:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
+
+    # If participant was marked left (e.g. from a previous disconnect), mark them joined again
+    if participant.status == models.ParticipantStatus.left:
+        participant.status = models.ParticipantStatus.joined
+        participant.left_at = None
+        db.commit()
 
     await websocket.accept()
 
     if room_code not in rooms:
         rooms[room_code] = {}
 
+    # If this participant already has an old socket (reconnect scenario), close the old one
+    old_ws = rooms[room_code].get(pid)
+    if old_ws and old_ws is not websocket:
+        try:
+            await old_ws.close(code=status.WS_1000_NORMAL_CLOSURE)
+        except Exception:
+            pass
+
     # Send existing peer IDs to the newly connected participant
-    existing_ids = list(rooms[room_code].keys())
+    existing_ids = [
+        existing_pid
+        for existing_pid in rooms[room_code].keys()
+        if existing_pid != pid
+    ]
     await websocket.send_json({"type": "peers", "ids": existing_ids})
 
-    # Register socket
+    # Register socket AFTER sending peers list so we don't offer to ourselves
     rooms[room_code][pid] = websocket
 
     try:
@@ -109,21 +130,24 @@ async def websocket_signaling(
             msg_type = msg.get("type")
             data = msg.get("data")
 
-            # Forward message to recipient as from sender
+            # Forward signaling message to the target peer
             if target_id and room_code in rooms and target_id in rooms[room_code]:
                 target_ws = rooms[room_code][target_id]
-                await target_ws.send_json({
-                    "from": pid,
-                    "type": msg_type,
-                    "data": data,
-                })
+                try:
+                    await target_ws.send_json({
+                        "from": pid,
+                        "type": msg_type,
+                        "data": data,
+                    })
+                except Exception:
+                    pass  # Target peer may have disconnected — ignore
     except WebSocketDisconnect:
         pass
     except Exception:
         pass
     finally:
         # Cleanup on disconnect
-        if room_code in rooms and pid in rooms[room_code]:
+        if room_code in rooms and rooms[room_code].get(pid) is websocket:
             del rooms[room_code][pid]
             if not rooms[room_code]:
                 del rooms[room_code]
