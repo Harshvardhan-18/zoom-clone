@@ -97,6 +97,10 @@ export default function PreJoin({ meeting, defaultName = "", asHost }: PreJoinPr
         String(participant.id)
       );
 
+      // Save mic/cam preferences so the meeting room can apply them on stream init
+      sessionStorage.setItem(`micOn:${meeting.meeting_code}`, String(micOn));
+      sessionStorage.setItem(`camOn:${meeting.meeting_code}`, String(camOn));
+
       // Stop preview tracks so meeting room can acquire stream freshly
       streamRef.current?.getTracks().forEach((t) => t.stop());
 

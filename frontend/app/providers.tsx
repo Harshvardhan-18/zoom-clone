@@ -8,7 +8,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <TooltipProvider>
       {children}
-      <Toaster position="top-right" richColors />
+      <Toaster position="top-center" richColors theme="system" />
     </TooltipProvider>
   );
 }

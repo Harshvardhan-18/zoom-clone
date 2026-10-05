@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Info, Copy } from "lucide-react";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import {
   Popover,
   PopoverContent,
@@ -47,8 +47,16 @@ export default function MeetingRoomPage() {
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [self, setSelf] = useState<Participant | null>(null);
-  const [micOn, setMicOn] = useState(true);
-  const [camOn, setCamOn] = useState(true);
+  const [micOn, setMicOn] = useState(() =>
+    typeof window !== "undefined"
+      ? sessionStorage.getItem(`micOn:${code}`) !== "false"
+      : true
+  );
+  const [camOn, setCamOn] = useState(() =>
+    typeof window !== "undefined"
+      ? sessionStorage.getItem(`camOn:${code}`) !== "false"
+      : true
+  );
   const [panelOpen, setPanelOpen] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
 
@@ -89,6 +97,13 @@ export default function MeetingRoomPage() {
   useEffect(() => {
     let active = true;
 
+    // Read prefs saved by prejoin (default true if missing)
+    const wantMic = sessionStorage.getItem(`micOn:${code}`) !== "false";
+    const wantCam = sessionStorage.getItem(`camOn:${code}`) !== "false";
+    // Clean up after reading — no longer needed
+    sessionStorage.removeItem(`micOn:${code}`);
+    sessionStorage.removeItem(`camOn:${code}`);
+
     async function initMedia() {
       try {
         const s = await navigator.mediaDevices.getUserMedia({
@@ -99,6 +114,11 @@ export default function MeetingRoomPage() {
           s.getTracks().forEach((t) => t.stop());
           return;
         }
+        // Apply pre-join preferences immediately
+        s.getAudioTracks().forEach((t) => (t.enabled = wantMic));
+        s.getVideoTracks().forEach((t) => (t.enabled = wantCam));
+        if (!wantMic) setMicOn(false);
+        if (!wantCam) setCamOn(false);
         streamRef.current = s;
         setStream(s);
       } catch (err) {
@@ -112,6 +132,9 @@ export default function MeetingRoomPage() {
             s.getTracks().forEach((t) => t.stop());
             return;
           }
+          // Apply mic pref; cam is already off (no video track)
+          s.getAudioTracks().forEach((t) => (t.enabled = wantMic));
+          if (!wantMic) setMicOn(false);
           streamRef.current = s;
           setStream(s);
           setCamOn(false);
@@ -234,9 +257,6 @@ export default function MeetingRoomPage() {
 
   return (
     <div className="h-[100dvh] w-screen flex flex-col bg-[#0F0F0F] text-white overflow-hidden select-none">
-      {/* Dark theme sonner toasts for room */}
-      <Toaster theme="dark" position="top-center" richColors />
-
       {/* Top bar */}
       <header className="h-12 bg-[#0F0F0F] flex items-center justify-between px-3 sm:px-4 shrink-0 border-b border-white/5 z-10">
         {/* Left: Info pill with meeting title */}
