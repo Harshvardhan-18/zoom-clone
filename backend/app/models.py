@@ -38,6 +38,7 @@ class User(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False)
     avatar_color = Column(String, default="#0B5CFF")
+    password_hash = Column(String, nullable=True)   # nullable so existing rows don't break
     created_at = Column(DateTime, default=datetime.utcnow)
 
     meetings = relationship("Meeting", back_populates="host")

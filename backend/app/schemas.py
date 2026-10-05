@@ -36,6 +36,22 @@ class UserUpdate(BaseModel):
     email: Optional[str] = None
 
 
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    token: str
+    user: UserOut
+
+
 # ── Meeting ───────────────────────────────────────────────────────────────────
 
 class MeetingCreate(BaseModel):

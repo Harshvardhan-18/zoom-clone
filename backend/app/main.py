@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.database import Base, SessionLocal, engine, get_db
-from app.routers import meetings, participants, signal
+from app.routers import auth, meetings, participants, signal
 from app.seed import DEFAULT_USER_ID, seed_if_empty
 
 
@@ -17,6 +17,15 @@ from app.seed import DEFAULT_USER_ID, seed_if_empty
 async def lifespan(app: FastAPI):
     """Create tables and seed the database on startup."""
     Base.metadata.create_all(bind=engine)
+    # Ensure password_hash column exists on users table for existing databases
+    with engine.connect() as conn:
+        try:
+            from sqlalchemy import text
+            conn.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR"))
+            conn.commit()
+        except Exception:
+            pass
+
     db = SessionLocal()
     try:
         seed_if_empty(db)
@@ -52,6 +61,7 @@ def health_check():
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────
+app.include_router(auth.router)
 app.include_router(meetings.router)
 app.include_router(participants.router)
 app.include_router(signal.router)

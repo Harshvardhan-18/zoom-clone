@@ -9,6 +9,8 @@ A full-stack Zoom web-app clone built with **Next.js (App Router, TypeScript, Ta
 
 ## Features
 
+- **Authentication** — Sign in / Register flow with session tokens and password hashing; includes a 1-click **"Fill Default"** button that automatically inputs demo credentials (`alex@example.com` / `demo1234`)
+- **Direct Guest Join** — Users who don't want to log in can join any meeting directly from the login page or via invite links (`/j/[code]`) by entering their name only
 - **Dashboard** — Zoom-style navbar, 2×2 action tiles (New Meeting, Join, Schedule, Share), live clock, Upcoming and Recent meeting lists
 - **New Meeting** — instantly creates a unique 10-digit meeting and joins as host; shows a copyable invite link
 - **Join** — by Meeting ID (spaces / dashes / full URL accepted), validates existence and ended state
@@ -175,6 +177,9 @@ erDiagram
 
 | Method | Path | Description |
 |---|---|---|
+| POST | `/api/auth/login` | Login with email & password (default: `alex@example.com` / `demo1234`) |
+| POST | `/api/auth/register` | Register a new user account |
+| GET | `/api/auth/me` | Validate session token and return user profile |
 | GET | `/api/me` | Return default user |
 | POST | `/api/meetings` | Create instant or scheduled meeting |
 | GET | `/api/meetings/upcoming` | Scheduled meetings in the future (auto-seeds if empty) |

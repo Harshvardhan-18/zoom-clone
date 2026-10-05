@@ -23,11 +23,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import { getMe, updateMe, type User } from "@/lib/api";
 import { getInitial, getAvatarColor } from "@/lib/utils";
-import { getStoredUser, setStoredUser, USER_CHANGED_EVENT } from "@/lib/user";
+import { getStoredUser, setStoredUser, logout, USER_CHANGED_EVENT } from "@/lib/user";
 
 export default function TopBar() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [localName, setLocalName] = useState<string>("");
   const [localEmail, setLocalEmail] = useState<string>("");
@@ -37,6 +39,12 @@ export default function TopBar() {
   const [formEmail, setFormEmail] = useState("");
   const [tabOnly, setTabOnly] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  function handleSignOut() {
+    logout();
+    toast.success("Signed out successfully");
+    router.push("/login");
+  }
 
   const loadIdentity = useCallback(async () => {
     const stored = getStoredUser();
@@ -210,8 +218,8 @@ export default function TopBar() {
               Settings
             </DropdownMenuItem>
             <DropdownMenuItem
-              className="px-3 py-2 text-sm text-[#232333] cursor-pointer rounded-lg hover:bg-[#F5F5FA]"
-              onClick={() => toast("Not available in demo")}
+              className="px-3 py-2 text-sm text-[#E5484D] focus:text-[#E5484D] cursor-pointer rounded-lg hover:bg-red-50 focus:bg-red-50"
+              onClick={handleSignOut}
             >
               Sign out
             </DropdownMenuItem>

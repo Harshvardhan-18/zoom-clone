@@ -65,7 +65,29 @@ export interface Participant {
   left_at: string | null;
 }
 
+export interface AuthResponse {
+  token: string;
+  user: User;
+}
+
 // ── API calls ─────────────────────────────────────────────────────────────────
+
+export const loginApi = (body: { email: string; password: string }) =>
+  req<AuthResponse>("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+export const registerApi = (body: { name: string; email: string; password: string }) =>
+  req<AuthResponse>("/api/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+export const getAuthMe = (token: string) =>
+  req<User>(`/api/auth/me?token=${encodeURIComponent(token)}`);
 
 export const getMe = () => req<User>("/api/me");
 

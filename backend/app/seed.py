@@ -43,6 +43,13 @@ def seed_upcoming_meetings(db, count: int = 4):
 
 def seed_if_empty(db):
     """Insert default user + sample meetings, and replenish upcoming meetings when none are upcoming."""
+    import hashlib
+
+    def _hash(pw: str) -> str:
+        return hashlib.sha256(pw.encode()).hexdigest()
+
+    DEFAULT_PASSWORD = "demo1234"
+
     # ── 1. Default user ──────────────────────────────────────────────────────────
     user = db.query(models.User).filter_by(id=DEFAULT_USER_ID).first()
     if not user:
@@ -51,8 +58,13 @@ def seed_if_empty(db):
             name="Alex Johnson",
             email="alex@example.com",
             avatar_color="#0B5CFF",
+            password_hash=_hash(DEFAULT_PASSWORD),
         )
         db.add(user)
+        db.commit()
+    elif not user.password_hash:
+        # Backfill password for existing rows (e.g. after migration)
+        user.password_hash = _hash(DEFAULT_PASSWORD)
         db.commit()
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)

@@ -1,11 +1,36 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import TopBar from "@/components/top-bar";
 import SideRail from "@/components/side-rail";
+import { isAuthenticated } from "@/lib/user";
 
 export default function AppShellLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [authed, setAuthed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      router.replace(`/login?redirect=${encodeURIComponent(pathname || "/")}`);
+    } else {
+      setAuthed(true);
+    }
+  }, [router, pathname]);
+
+  if (authed === null) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-[#F5F5FA]">
+        <div className="h-10 w-10 rounded-full border-3 border-[#0B5CFF] border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col bg-[#F5F5FA] overflow-hidden">
       {/* 56px top bar */}
