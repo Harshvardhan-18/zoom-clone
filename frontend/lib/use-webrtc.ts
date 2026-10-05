@@ -241,8 +241,10 @@ export function useWebRTC(
       }
     };
 
-    ws.onerror = (err) => {
-      console.error("WebSocket error:", err);
+    ws.onerror = () => {
+      // WebSocket error events intentionally carry no detail (browser security policy).
+      // Using console.warn to avoid triggering the Next.js dev error overlay.
+      console.warn("WebSocket connection error — will retry on next mount.");
     };
 
     return () => {
