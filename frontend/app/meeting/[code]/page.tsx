@@ -37,12 +37,12 @@ export default function MeetingRoomPage() {
   const { code } = useParams<{ code: string }>();
   const router = useRouter();
 
-  // Participant id stored in sessionStorage by prejoin
-  const participantId = Number(
-    typeof window !== "undefined"
-      ? sessionStorage.getItem(`participant:${code}`) ?? "0"
-      : "0"
-  );
+  // Participant id stored in sessionStorage by prejoin.
+  // useState with a lazy initializer so it's always read client-side (never 0 from SSR).
+  const [participantId] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    return Number(sessionStorage.getItem(`participant:${code}`) ?? "0");
+  });
 
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
