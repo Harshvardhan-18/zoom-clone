@@ -71,6 +71,7 @@ class MeetingOut(BaseModel):
     status: str
     start_time: Optional[datetime]
     duration_minutes: int
+    is_seed: Optional[bool] = False
     created_at: datetime
     started_at: Optional[datetime]
     ended_at: Optional[datetime]

@@ -2,7 +2,8 @@
 
 import hashlib
 import secrets
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 
 from app import models, schemas
@@ -30,6 +31,18 @@ def get_user_from_token(token: str, db: Session) -> models.User | None:
     if user_id is None:
         return None
     return db.query(models.User).filter_by(id=user_id).first()
+
+
+def get_current_user_optional(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+) -> models.User | None:
+    """Extract authenticated user from Authorization: Bearer <token> header, or return None."""
+    if not authorization:
+        return None
+    parts = authorization.split()
+    token = parts[1] if len(parts) == 2 and parts[0].lower() == "bearer" else authorization
+    return get_user_from_token(token.strip(), db)
 
 
 # ── Register ──────────────────────────────────────────────────────────────────

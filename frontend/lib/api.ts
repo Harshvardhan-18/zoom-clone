@@ -15,9 +15,19 @@ export function getApiBase(): string {
   return (envUrl || "http://localhost:8000").replace(/\/+$/, "");
 }
 
+import { getAuthToken } from "./user";
+
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
   const base = getApiBase();
-  const res = await fetch(`${base}${path}`, options);
+  const token = getAuthToken();
+  const headers = new Headers(options?.headers || {});
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  const res = await fetch(`${base}${path}`, {
+    ...options,
+    headers,
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail ?? "Request failed");
@@ -47,6 +57,7 @@ export interface Meeting {
   status: "scheduled" | "live" | "ended";
   start_time: string | null;
   duration_minutes: number;
+  is_seed?: boolean;
   created_at: string;
   started_at: string | null;
   ended_at: string | null;

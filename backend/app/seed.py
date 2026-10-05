@@ -35,6 +35,7 @@ def seed_upcoming_meetings(db, count: int = 4):
             status=models.MeetingStatus.scheduled,
             start_time=target_date,
             duration_minutes=30,
+            is_seed=True,
         )
         db.add(meeting)
 
@@ -69,11 +70,23 @@ def seed_if_empty(db):
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
+    # ── 1.5 Backfill is_seed for existing seed meetings ─────────────────────────
+    seed_titles = [
+        "Weekly Team Sync", "Design System Review", "Client Onboarding Call",
+        "1:1 with Engineering Lead", "Product Roadmap Q4", "Engineering All-Hands",
+        "UX Feedback Session", "Investor Update", "Sprint Retrospective"
+    ]
+    db.query(models.Meeting).filter(
+        models.Meeting.title.in_(seed_titles),
+        models.Meeting.host_id == DEFAULT_USER_ID,
+    ).update({"is_seed": True}, synchronize_session=False)
+    db.commit()
+
     # ── 2. Refresh upcoming meetings if expired or empty ─────────────────────────
     upcoming_count = (
         db.query(models.Meeting)
         .filter(
-            models.Meeting.host_id == DEFAULT_USER_ID,
+            models.Meeting.is_seed == True,
             models.Meeting.status == models.MeetingStatus.scheduled,
             models.Meeting.start_time >= now,
         )
@@ -87,7 +100,7 @@ def seed_if_empty(db):
     past_count = (
         db.query(models.Meeting)
         .filter(
-            models.Meeting.host_id == DEFAULT_USER_ID,
+            models.Meeting.is_seed == True,
             models.Meeting.status == models.MeetingStatus.ended,
         )
         .count()
@@ -113,6 +126,7 @@ def seed_if_empty(db):
                 status=models.MeetingStatus.ended,
                 start_time=started,
                 duration_minutes=duration,
+                is_seed=True,
                 started_at=started,
                 ended_at=ended,
             )

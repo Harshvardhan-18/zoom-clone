@@ -1,14 +1,16 @@
 """Meeting endpoints: create, list, get, delete, join, end, mute-all."""
 
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Header
-from sqlalchemy.orm import Session
 from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Header
+from sqlalchemy import or_
+from sqlalchemy.orm import Session
 
 from app import models, schemas
 from app.database import get_db
 from app.utils import generate_meeting_code, normalize_code
 from app.seed import DEFAULT_USER_ID
+from app.routers import auth
 
 router = APIRouter(prefix="/api/meetings", tags=["meetings"])
 
@@ -37,9 +39,14 @@ def get_meeting_or_404(db: Session, code: str) -> models.Meeting:
 # ── Create ────────────────────────────────────────────────────────────────────
 
 @router.post("", response_model=schemas.MeetingOut, status_code=201)
-def create_meeting(body: schemas.MeetingCreate, db: Session = Depends(get_db)):
+def create_meeting(
+    body: schemas.MeetingCreate,
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional),
+    db: Session = Depends(get_db),
+):
     """Create an instant meeting (no start_time) or a scheduled one."""
-    user = db.query(models.User).filter_by(id=DEFAULT_USER_ID).first()
+    user = current_user or db.query(models.User).filter_by(id=DEFAULT_USER_ID).first()
+    host_id = user.id
 
     if body.start_time is None:
         # Instant meeting: live immediately
@@ -47,11 +54,12 @@ def create_meeting(body: schemas.MeetingCreate, db: Session = Depends(get_db)):
             meeting_code=generate_meeting_code(db),
             title=body.title or f"{user.name}'s Meeting",
             description=body.description,
-            host_id=DEFAULT_USER_ID,
+            host_id=host_id,
             type=models.MeetingType.instant,
             status=models.MeetingStatus.live,
             started_at=datetime.utcnow(),
             duration_minutes=body.duration_minutes or 30,
+            is_seed=False,
         )
     else:
         st = body.start_time
@@ -65,11 +73,12 @@ def create_meeting(body: schemas.MeetingCreate, db: Session = Depends(get_db)):
             meeting_code=generate_meeting_code(db),
             title=body.title,
             description=body.description,
-            host_id=DEFAULT_USER_ID,
+            host_id=host_id,
             type=models.MeetingType.scheduled,
             status=models.MeetingStatus.scheduled,
             start_time=st,
             duration_minutes=body.duration_minutes or 30,
+            is_seed=False,
         )
 
     db.add(meeting)
@@ -81,13 +90,23 @@ def create_meeting(body: schemas.MeetingCreate, db: Session = Depends(get_db)):
 # ── List ──────────────────────────────────────────────────────────────────────
 
 @router.get("/upcoming", response_model=list[schemas.MeetingOut])
-def upcoming_meetings(db: Session = Depends(get_db)):
-    """Return scheduled meetings with start_time in the future, soonest first."""
+def upcoming_meetings(
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    """Return scheduled seed meetings + meetings created by the authenticated user."""
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+    uid = current_user.id if current_user else DEFAULT_USER_ID
+
+    user_filter = or_(
+        models.Meeting.is_seed == True,
+        models.Meeting.host_id == uid,
+    )
+
     results = (
         db.query(models.Meeting)
         .filter(
-            models.Meeting.host_id == DEFAULT_USER_ID,
+            user_filter,
             models.Meeting.status == models.MeetingStatus.scheduled,
             models.Meeting.start_time >= now,
         )
@@ -100,7 +119,7 @@ def upcoming_meetings(db: Session = Depends(get_db)):
         results = (
             db.query(models.Meeting)
             .filter(
-                models.Meeting.host_id == DEFAULT_USER_ID,
+                user_filter,
                 models.Meeting.status == models.MeetingStatus.scheduled,
                 models.Meeting.start_time >= now,
             )
@@ -111,13 +130,25 @@ def upcoming_meetings(db: Session = Depends(get_db)):
 
 
 @router.get("/recent", response_model=list[schemas.MeetingOut])
-def recent_meetings(db: Session = Depends(get_db)):
-    """Return ended meetings for the default user, newest first, up to 10."""
+def recent_meetings(
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    """Return ended meetings: seed meetings + user's own meetings/participations."""
+    uid = current_user.id if current_user else DEFAULT_USER_ID
+    attended_ids = [
+        p.meeting_id
+        for p in db.query(models.Participant.meeting_id).filter_by(user_id=uid).all()
+    ]
     return (
         db.query(models.Meeting)
         .filter(
-            models.Meeting.host_id == DEFAULT_USER_ID,
             models.Meeting.status == models.MeetingStatus.ended,
+            or_(
+                models.Meeting.is_seed == True,
+                models.Meeting.host_id == uid,
+                models.Meeting.id.in_(attended_ids),
+            ),
         )
         .order_by(models.Meeting.ended_at.desc())
         .limit(10)
@@ -137,11 +168,15 @@ def get_meeting(code: str, db: Session = Depends(get_db)):
 def delete_meeting(
     code: str,
     x_participant_id: Optional[int] = Header(None),
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional),
     db: Session = Depends(get_db),
 ):
     """Delete a scheduled meeting (host only)."""
     meeting = get_meeting_or_404(db, code)
-    require_host(db, meeting.meeting_code, x_participant_id)
+    if current_user and current_user.id == meeting.host_id:
+        pass  # Meeting creator is authorized
+    else:
+        require_host(db, meeting.meeting_code, x_participant_id)
     db.delete(meeting)
     db.commit()
 
@@ -149,7 +184,12 @@ def delete_meeting(
 # ── Join ──────────────────────────────────────────────────────────────────────
 
 @router.post("/{code}/join", response_model=schemas.ParticipantOut, status_code=201)
-def join_meeting(code: str, body: schemas.JoinRequest, db: Session = Depends(get_db)):
+def join_meeting(
+    code: str,
+    body: schemas.JoinRequest,
+    current_user: Optional[models.User] = Depends(auth.get_current_user_optional),
+    db: Session = Depends(get_db),
+):
     """Add a participant to the meeting. Flips status to live on first join."""
     meeting = get_meeting_or_404(db, code)
     if meeting.status == models.MeetingStatus.ended:
@@ -160,16 +200,28 @@ def join_meeting(code: str, body: schemas.JoinRequest, db: Session = Depends(get
         meeting.status = models.MeetingStatus.live
         meeting.started_at = datetime.utcnow()
 
-    # Only grant host role if requester is the actual host
+    # Determine if requester is the actual meeting host
+    is_meeting_host = False
+    if current_user and current_user.id == meeting.host_id:
+        is_meeting_host = True
+    elif not current_user and meeting.host_id == DEFAULT_USER_ID:
+        is_meeting_host = True
+
     role = (
         models.ParticipantRole.host
-        if body.as_host and meeting.host_id == DEFAULT_USER_ID
+        if body.as_host and is_meeting_host
         else models.ParticipantRole.participant
     )
 
+    participant_user_id = None
+    if current_user:
+        participant_user_id = current_user.id
+    elif role == models.ParticipantRole.host and meeting.host_id == DEFAULT_USER_ID:
+        participant_user_id = DEFAULT_USER_ID
+
     participant = models.Participant(
         meeting_id=meeting.id,
-        user_id=DEFAULT_USER_ID if body.as_host else None,
+        user_id=participant_user_id,
         display_name=body.display_name,
         role=role,
         is_muted=False,

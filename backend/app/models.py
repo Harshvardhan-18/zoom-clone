@@ -57,6 +57,7 @@ class Meeting(Base):
     status = Column(Enum(MeetingStatus), default=MeetingStatus.scheduled)
     start_time = Column(DateTime, nullable=True)
     duration_minutes = Column(Integer, default=30)
+    is_seed = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     started_at = Column(DateTime, nullable=True)
     ended_at = Column(DateTime, nullable=True)

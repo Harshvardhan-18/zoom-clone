@@ -17,11 +17,17 @@ from app.seed import DEFAULT_USER_ID, seed_if_empty
 async def lifespan(app: FastAPI):
     """Create tables and seed the database on startup."""
     Base.metadata.create_all(bind=engine)
-    # Ensure password_hash column exists on users table for existing databases
+    # Ensure password_hash and is_seed columns exist on tables for existing databases
     with engine.connect() as conn:
         try:
             from sqlalchemy import text
             conn.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR"))
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            from sqlalchemy import text
+            conn.execute(text("ALTER TABLE meetings ADD COLUMN is_seed BOOLEAN DEFAULT 0"))
             conn.commit()
         except Exception:
             pass
@@ -67,18 +73,28 @@ app.include_router(participants.router)
 app.include_router(signal.router)
 
 
-# ── Default user endpoint ─────────────────────────────────────────────────────
+# ── User identity endpoint ───────────────────────────────────────────────────
 @app.get("/api/me", response_model=schemas.UserOut, tags=["users"])
-def get_me(db: Session = Depends(get_db)):
-    """Return the always-logged-in default user."""
+def get_me(
+    current_user: models.User | None = Depends(auth.get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    """Return the currently authenticated user, or the default user."""
+    if current_user:
+        return current_user
     user = db.query(models.User).filter_by(id=DEFAULT_USER_ID).first()
     return user
 
 
 @app.patch("/api/me", response_model=schemas.UserOut, tags=["users"])
-def update_me(body: schemas.UserUpdate, db: Session = Depends(get_db)):
-    """Update default user's name and/or email."""
-    user = db.query(models.User).filter_by(id=DEFAULT_USER_ID).first()
+def update_me(
+    body: schemas.UserUpdate,
+    current_user: models.User | None = Depends(auth.get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    """Update current user (or default user)'s name and/or email."""
+    target_id = current_user.id if current_user else DEFAULT_USER_ID
+    user = db.query(models.User).filter_by(id=target_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if body.name is not None and body.name.strip():
