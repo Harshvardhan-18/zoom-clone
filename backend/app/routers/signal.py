@@ -47,6 +47,25 @@ def close_room(code: str):
                 pass
 
 
+def broadcast_to_room(code: str, payload: dict):
+    """Send a JSON payload to every socket in a room (fire-and-forget)."""
+    room_code = normalize_code(code)
+    if room_code not in rooms:
+        return
+    for ws in list(rooms[room_code].values()):
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                async def _send(w=ws):
+                    try:
+                        await w.send_json(payload)
+                    except Exception:
+                        pass
+                loop.create_task(_send())
+        except Exception:
+            pass
+
+
 @router.websocket("/ws/{code}")
 async def websocket_signaling(
     websocket: WebSocket,

@@ -64,8 +64,19 @@ export default function MeetingRoomPage() {
     router.push("/");
   }, [code, router]);
 
+  // Stable ref so handleHostChanged can call poll without a circular dependency
+  const pollRef = useRef<() => void>(() => {});
+
+  // When the backend promotes us (or anyone) to host, refresh immediately
+  const handleHostChanged = useCallback((newHostId: number) => {
+    pollRef.current();
+    if (newHostId === participantId) {
+      toast.success("You are now the host");
+    }
+  }, [participantId]);
+
   // WebRTC mesh: exchange audio/video peer-to-peer
-  const remoteStreams = useWebRTC(code, participantId, stream, handleRemoved);
+  const remoteStreams = useWebRTC(code, participantId, stream, handleRemoved, handleHostChanged);
 
   // Redirect to pre-join if no participant ID
   useEffect(() => {
@@ -157,6 +168,9 @@ export default function MeetingRoomPage() {
       // Ignore transient network errors
     }
   }, [code, participantId, micOn, router, handleRemoved]);
+
+  // Keep pollRef current so handleHostChanged always calls the latest version
+  pollRef.current = poll;
 
   useEffect(() => {
     poll();

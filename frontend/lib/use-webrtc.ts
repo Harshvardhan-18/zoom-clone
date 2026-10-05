@@ -17,7 +17,8 @@ export function useWebRTC(
   code: string,
   participantId: number,
   localStream: MediaStream | null,
-  onRemoved?: () => void
+  onRemoved?: () => void,
+  onHostChanged?: (newHostId: number) => void
 ) {
   const [remoteStreams, setRemoteStreams] = useState<Record<number, MediaStream>>({});
   const pcsRef = useRef<Map<number, RTCPeerConnection>>(new Map());
@@ -187,6 +188,11 @@ export function useWebRTC(
         // 6. Kicked / removed by host
         if (msg.type === "removed") {
           onRemoved?.();
+        }
+
+        // 7. Host transferred to another participant
+        if (msg.type === "host_changed" && msg.new_host_id) {
+          onHostChanged?.(msg.new_host_id);
         }
       } catch (err) {
         console.error("WebRTC signaling error:", err);

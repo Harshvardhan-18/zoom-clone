@@ -62,11 +62,58 @@ def update_participant(
     "/participants/{participant_id}/leave", response_model=schemas.ParticipantOut
 )
 def leave_meeting(participant_id: int, db: Session = Depends(get_db)):
-    """Mark a participant as left."""
+    """Mark a participant as left. If the leaver is the host, transfer host
+    role to a random remaining participant, or end the meeting if no one else
+    is still joined."""
     p = get_participant_or_404(db, participant_id)
     p.status = models.ParticipantStatus.left
     p.left_at = datetime.utcnow()
     db.commit()
+
+    # ── Host-transfer / meeting-end logic ────────────────────────────────────
+    if p.role == models.ParticipantRole.host:
+        # Find remaining joined participants (exclude the one who just left)
+        remaining = (
+            db.query(models.Participant)
+            .filter(
+                models.Participant.meeting_id == p.meeting_id,
+                models.Participant.status == models.ParticipantStatus.joined,
+                models.Participant.id != p.id,
+            )
+            .all()
+        )
+
+        meeting = db.query(models.Meeting).filter_by(id=p.meeting_id).first()
+
+        if remaining:
+            # Promote a random participant to host
+            import random
+            new_host = random.choice(remaining)
+            new_host.role = models.ParticipantRole.host
+            db.commit()
+
+            # Notify the room via WebSocket so UI updates instantly
+            try:
+                from app.routers.signal import broadcast_to_room
+                if meeting:
+                    broadcast_to_room(
+                        meeting.meeting_code,
+                        {"type": "host_changed", "new_host_id": new_host.id},
+                    )
+            except Exception:
+                pass  # Non-critical — polling will catch the role change
+        elif meeting and meeting.status == models.MeetingStatus.live:
+            # No one left — end the meeting so it appears in recents
+            meeting.status = models.MeetingStatus.ended
+            meeting.ended_at = datetime.utcnow()
+            db.commit()
+
+            try:
+                from app.routers.signal import close_room
+                close_room(meeting.meeting_code)
+            except Exception:
+                pass
+
     db.refresh(p)
     return p
 
