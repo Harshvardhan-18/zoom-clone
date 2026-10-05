@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getMeeting, type Meeting } from "@/lib/api";
+import { isAuthenticated, getStoredUser } from "@/lib/user";
 import PreJoin from "@/components/prejoin";
 
 function InvitePageContent() {
@@ -16,6 +17,14 @@ function InvitePageContent() {
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [authed, setAuthed] = useState(false);
+  const [userName, setUserName] = useState("");
+
+  useEffect(() => {
+    setAuthed(isAuthenticated());
+    const stored = getStoredUser();
+    if (stored?.name) setUserName(stored.name);
+  }, []);
 
   useEffect(() => {
     if (!code) return;
@@ -32,13 +41,30 @@ function InvitePageContent() {
 
   return (
     <div className="min-h-screen bg-[#F5F5FA] flex flex-col">
-      {/* Minimal top bar (wordmark only) */}
-      <header className="h-[56px] bg-white border-b border-[#E4E4ED] px-6 flex items-center shrink-0">
+      {/* Top bar with wordmark & auth link */}
+      <header className="h-[56px] bg-white border-b border-[#E4E4ED] px-6 flex items-center justify-between shrink-0 select-none">
         <Link href="/" className="flex items-center select-none">
           <span className="text-[#0B5CFF] font-bold text-[28px] tracking-tight leading-none">
             zoom
           </span>
         </Link>
+        <div>
+          {authed ? (
+            <Link
+              href="/"
+              className="text-xs font-semibold text-[#232333] hover:text-[#0B5CFF] px-3 py-1.5 rounded-lg hover:bg-[#F5F5FA] transition-colors"
+            >
+              Dashboard ({userName || "Signed In"})
+            </Link>
+          ) : (
+            <Link
+              href={`/login?redirect=/j/${code}`}
+              className="text-xs font-semibold text-[#0B5CFF] hover:text-[#0A4FD9] px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+            >
+              Sign In
+            </Link>
+          )}
+        </div>
       </header>
 
       {/* Content centered vertically */}

@@ -2,14 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mic, MicOff, Video, VideoOff } from "lucide-react";
+import Link from "next/link";
+import { Mic, MicOff, Video, VideoOff, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { type Meeting, joinMeeting, getMe } from "@/lib/api";
 import { formatMeetingId, getInitial } from "@/lib/utils";
-import { getStoredUser, setStoredUser } from "@/lib/user";
+import { getStoredUser, setStoredUser, isAuthenticated, logout } from "@/lib/user";
 
 interface PreJoinProps {
   meeting: Meeting;
@@ -27,20 +28,43 @@ export default function PreJoin({ meeting, defaultName = "", asHost }: PreJoinPr
   const [camOn, setCamOn] = useState(true);
   const [camError, setCamError] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loggedInName, setLoggedInName] = useState("");
 
   // Prefill with stored name or backend user
   useEffect(() => {
+    const authed = isAuthenticated();
+    setIsLoggedIn(authed);
+
     const stored = getStoredUser();
-    if (stored?.name && !defaultName) {
-      setName(stored.name);
+    if (stored?.name) {
+      setLoggedInName(stored.name);
+      if (!defaultName) {
+        setName(stored.name);
+      }
     } else if (!name) {
-      getMe()
-        .then((u) => {
-          if (u?.name) setName(asHost ? u.name : "Guest Participant");
-        })
-        .catch(() => {});
+      if (authed) {
+        getMe()
+          .then((u) => {
+            if (u?.name) {
+              setLoggedInName(u.name);
+              setName(asHost ? u.name : u.name);
+            }
+          })
+          .catch(() => {});
+      } else {
+        setName(asHost ? "Host" : "Guest Participant");
+      }
     }
   }, [name, defaultName, asHost]);
+
+  function handleSignOutToGuest() {
+    logout();
+    setIsLoggedIn(false);
+    setLoggedInName("");
+    setName("Guest Participant");
+    toast.info("Signed out. Joining as guest.");
+  }
 
   // Request camera + mic preview
   useEffect(() => {
@@ -222,6 +246,35 @@ export default function PreJoin({ meeting, defaultName = "", asHost }: PreJoinPr
           >
             {joining ? (asHost ? "Starting..." : "Joining...") : (asHost ? "Start" : "Join")}
           </Button>
+
+          {/* Account status / Sign in option */}
+          <div className="mt-4 pt-3 border-t border-[#E4E4ED]">
+            {isLoggedIn ? (
+              <div className="flex items-center justify-between text-xs text-[#6E6E85]">
+                <span className="truncate">
+                  Signed in as <strong className="text-[#232333] font-semibold">{loggedInName || name}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleSignOutToGuest}
+                  className="text-[#0B5CFF] hover:underline font-medium cursor-pointer shrink-0 ml-2"
+                >
+                  Join as guest instead
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between text-xs text-[#6E6E85]">
+                <span>Have a Zoom account?</span>
+                <Link
+                  href={`/login?redirect=/j/${meeting.meeting_code}`}
+                  className="text-[#0B5CFF] font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Sign in</span>
+                  <LogIn size={13} />
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
