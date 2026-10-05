@@ -43,6 +43,19 @@ class User(Base):
 
     meetings = relationship("Meeting", back_populates="host")
     participations = relationship("Participant", back_populates="user")
+    tokens = relationship("UserToken", back_populates="user", cascade="all, delete-orphan")
+
+
+class UserToken(Base):
+    """Persistent auth tokens — survive server restarts unlike the in-memory dict."""
+    __tablename__ = "user_tokens"
+
+    id = Column(Integer, primary_key=True)
+    token = Column(String(64), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="tokens")
 
 
 class Meeting(Base):

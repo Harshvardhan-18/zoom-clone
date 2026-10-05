@@ -11,26 +11,25 @@ from app.database import get_db
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-# In-memory token store: token -> user_id
-# Resets on server restart — acceptable for a demo app with ephemeral SQLite.
-_tokens: dict[str, int] = {}
-
 
 def _hash(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 
-def create_token(user_id: int) -> str:
+def create_token(user_id: int, db: Session) -> str:
+    """Create and persist a new auth token for the given user."""
     token = secrets.token_hex(32)
-    _tokens[token] = user_id
+    db.add(models.UserToken(token=token, user_id=user_id))
+    db.commit()
     return token
 
 
 def get_user_from_token(token: str, db: Session) -> models.User | None:
-    user_id = _tokens.get(token)
-    if user_id is None:
+    """Look up a user by their persisted auth token."""
+    row = db.query(models.UserToken).filter_by(token=token).first()
+    if row is None:
         return None
-    return db.query(models.User).filter_by(id=user_id).first()
+    return db.query(models.User).filter_by(id=row.user_id).first()
 
 
 def get_current_user_optional(
@@ -70,7 +69,7 @@ def register(body: schemas.RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    token = create_token(user.id)
+    token = create_token(user.id, db)
     return {"token": token, "user": user}
 
 
@@ -96,7 +95,7 @@ def login(body: schemas.LoginRequest, db: Session = Depends(get_db)):
     elif user.password_hash != _hash(body.password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    token = create_token(user.id)
+    token = create_token(user.id, db)
     return {"token": token, "user": user}
 
 
