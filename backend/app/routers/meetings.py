@@ -94,14 +94,19 @@ def upcoming_meetings(
     current_user: Optional[models.User] = Depends(auth.get_current_user_optional),
     db: Session = Depends(get_db),
 ):
-    """Return scheduled seed meetings + meetings created by the authenticated user."""
+    """Return scheduled seed meetings + meetings created by the authenticated user.
+    Guests (no token) see only seed meetings."""
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    uid = current_user.id if current_user else DEFAULT_USER_ID
 
-    user_filter = or_(
-        models.Meeting.is_seed == True,
-        models.Meeting.host_id == uid,
-    )
+    # Build filter: always include seeds; add user's own meetings only if logged in
+    if current_user:
+        user_filter = or_(
+            models.Meeting.is_seed == True,
+            models.Meeting.host_id == current_user.id,
+        )
+    else:
+        # Guest: seeds only — do NOT fall back to DEFAULT_USER_ID
+        user_filter = (models.Meeting.is_seed == True)
 
     results = (
         db.query(models.Meeting)
@@ -134,21 +139,28 @@ def recent_meetings(
     current_user: Optional[models.User] = Depends(auth.get_current_user_optional),
     db: Session = Depends(get_db),
 ):
-    """Return ended meetings: seed meetings + user's own meetings/participations."""
-    uid = current_user.id if current_user else DEFAULT_USER_ID
-    attended_ids = [
-        p.meeting_id
-        for p in db.query(models.Participant.meeting_id).filter_by(user_id=uid).all()
-    ]
+    """Return ended meetings: seed meetings + user's own meetings/participations.
+    Guests see only seed meetings."""
+    if current_user:
+        uid = current_user.id
+        attended_ids = [
+            p.meeting_id
+            for p in db.query(models.Participant.meeting_id).filter_by(user_id=uid).all()
+        ]
+        meeting_filter = or_(
+            models.Meeting.is_seed == True,
+            models.Meeting.host_id == uid,
+            models.Meeting.id.in_(attended_ids),
+        )
+    else:
+        # Guest: seeds only
+        meeting_filter = (models.Meeting.is_seed == True)
+
     return (
         db.query(models.Meeting)
         .filter(
             models.Meeting.status == models.MeetingStatus.ended,
-            or_(
-                models.Meeting.is_seed == True,
-                models.Meeting.host_id == uid,
-                models.Meeting.id.in_(attended_ids),
-            ),
+            meeting_filter,
         )
         .order_by(models.Meeting.ended_at.desc())
         .limit(10)
