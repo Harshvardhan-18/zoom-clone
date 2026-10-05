@@ -83,16 +83,31 @@ def create_meeting(body: schemas.MeetingCreate, db: Session = Depends(get_db)):
 @router.get("/upcoming", response_model=list[schemas.MeetingOut])
 def upcoming_meetings(db: Session = Depends(get_db)):
     """Return scheduled meetings with start_time in the future, soonest first."""
-    return (
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    results = (
         db.query(models.Meeting)
         .filter(
             models.Meeting.host_id == DEFAULT_USER_ID,
             models.Meeting.status == models.MeetingStatus.scheduled,
-            models.Meeting.start_time >= datetime.utcnow(),
+            models.Meeting.start_time >= now,
         )
         .order_by(models.Meeting.start_time.asc())
         .all()
     )
+    if not results:
+        from app.seed import seed_if_empty
+        seed_if_empty(db)
+        results = (
+            db.query(models.Meeting)
+            .filter(
+                models.Meeting.host_id == DEFAULT_USER_ID,
+                models.Meeting.status == models.MeetingStatus.scheduled,
+                models.Meeting.start_time >= now,
+            )
+            .order_by(models.Meeting.start_time.asc())
+            .all()
+        )
+    return results
 
 
 @router.get("/recent", response_model=list[schemas.MeetingOut])
