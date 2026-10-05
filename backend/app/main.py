@@ -1,4 +1,4 @@
-"""FastAPI application entry point: CORS, routers, and startup DB init."""
+"""FastAPI application entry point: CORS, routers, and startup DB init. (v1.1.0 with auth)"""
 
 import os
 from contextlib import asynccontextmanager
