@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Header
-from sqlalchemy import or_
+from sqlalchemy import or_, and_, nullslast
 from sqlalchemy.orm import Session
 
 from app import models, schemas
@@ -139,31 +139,46 @@ def recent_meetings(
     current_user: Optional[models.User] = Depends(auth.get_current_user_optional),
     db: Session = Depends(get_db),
 ):
-    """Return ended meetings: seed meetings + user's own meetings/participations.
-    Guests see only seed meetings."""
+    """Return meetings the user has participated in (live OR ended).
+    Seeds are included only when ended. Guests see only ended seed meetings."""
+
     if current_user:
         uid = current_user.id
+        # Meetings where the user has a participant row (any status)
         attended_ids = [
             p.meeting_id
             for p in db.query(models.Participant.meeting_id).filter_by(user_id=uid).all()
         ]
-        meeting_filter = or_(
+        # Seeds: only when ended (they're never actually "live" for real users)
+        seed_filter = and_(
             models.Meeting.is_seed == True,
-            models.Meeting.host_id == uid,
-            models.Meeting.id.in_(attended_ids),
+            models.Meeting.status == models.MeetingStatus.ended,
         )
+        # User's own or attended meetings: live OR ended (so they can rejoin if live)
+        participated_filter = and_(
+            or_(
+                models.Meeting.host_id == uid,
+                models.Meeting.id.in_(attended_ids),
+            ),
+            models.Meeting.status.in_([
+                models.MeetingStatus.live,
+                models.MeetingStatus.ended,
+            ]),
+        )
+        meeting_filter = or_(seed_filter, participated_filter)
     else:
-        # Guest: seeds only
-        meeting_filter = (models.Meeting.is_seed == True)
+        # Guest: only ended seed meetings
+        meeting_filter = and_(
+            models.Meeting.is_seed == True,
+            models.Meeting.status == models.MeetingStatus.ended,
+        )
 
     return (
         db.query(models.Meeting)
-        .filter(
-            models.Meeting.status == models.MeetingStatus.ended,
-            meeting_filter,
-        )
-        .order_by(models.Meeting.ended_at.desc())
-        .limit(10)
+        .filter(meeting_filter)
+        # Use started_at for ordering — ended_at is NULL for live meetings
+        .order_by(nullslast(models.Meeting.started_at.desc()))
+        .limit(15)
         .all()
     )
 

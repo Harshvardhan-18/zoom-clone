@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MoreVertical, Trash2, Copy, Play } from "lucide-react";
+import { MoreVertical, Trash2, Copy, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -102,6 +102,10 @@ export default function MeetingList({
     router.push(`/j/${meeting.meeting_code}?host=1`);
   }
 
+  function handleJoin(meeting: Meeting) {
+    router.push(`/j/${meeting.meeting_code}`);
+  }
+
   return (
     <div className="divide-y divide-[#E4E4ED]">
       {meetings.map((m) => {
@@ -176,20 +180,23 @@ export default function MeetingList({
                   </DropdownMenu>
                 </>
               ) : (
+                /* ── Recent tab ── */
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-[#6E6E85]">
-                    {/* Recent participants estimate or display */}
-                    2 participants
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleStart(m)}
-                    className="h-9 px-3 text-sm text-[#0B5CFF] hover:text-[#0A4FD9] hover:bg-blue-50 rounded-lg cursor-pointer font-medium"
-                  >
-                    <Play size={13} className="mr-1.5" />
-                    Start again
-                  </Button>
+                  {m.status === "live" ? (
+                    /* Meeting still ongoing — offer rejoin */
+                    <Button
+                      onClick={() => handleJoin(m)}
+                      className="h-9 px-4 rounded-lg bg-[#0B5CFF] hover:bg-[#0A4FD9] text-white text-sm font-medium cursor-pointer shadow-xs"
+                    >
+                      <LogIn size={14} className="mr-1.5" />
+                      Join
+                    </Button>
+                  ) : (
+                    /* Meeting ended */
+                    <span className="text-sm text-[#6E6E85] font-medium px-3 py-1.5 bg-[#F5F5FA] rounded-lg">
+                      Ended
+                    </span>
+                  )}
                 </div>
               )}
             </div>
