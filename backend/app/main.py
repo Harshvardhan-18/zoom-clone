@@ -31,6 +31,12 @@ async def lifespan(app: FastAPI):
             conn.commit()
         except Exception:
             pass
+        try:
+            from sqlalchemy import text
+            conn.execute(text("DROP TABLE IF EXISTS user_tokens"))
+            conn.commit()
+        except Exception:
+            pass
 
     db = SessionLocal()
     try:
