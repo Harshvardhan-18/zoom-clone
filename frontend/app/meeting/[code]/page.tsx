@@ -69,6 +69,7 @@ export default function MeetingRoomPage() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     sessionStorage.removeItem(`participant:${code}`);
     toast.error("You were removed by the host");
+    router.refresh();
     router.push("/");
   }, [code, router]);
 
@@ -93,16 +94,25 @@ export default function MeetingRoomPage() {
     }
   }, [participantId, code, router]);
 
+  // Capture initial mic/cam preferences in stable refs.
+  // Reading from state (already correctly initialised from sessionStorage by lazy useState).
+  // Using refs means the initMedia effect always sees the user's actual prejoin choice,
+  // even when React Strict Mode double-invokes the effect (the 2nd run would otherwise
+  // find the sessionStorage keys already deleted and default to true, causing a mismatch).
+  const wantMicRef = useRef(micOn);
+  const wantCamRef = useRef(camOn);
+
+  // Clean up the sessionStorage prefs once on mount (safe to delete twice in Strict Mode)
+  useEffect(() => {
+    sessionStorage.removeItem(`micOn:${code}`);
+    sessionStorage.removeItem(`camOn:${code}`);
+  }, [code]);
+
   // Acquire local media
   useEffect(() => {
     let active = true;
-
-    // Read prefs saved by prejoin (default true if missing)
-    const wantMic = sessionStorage.getItem(`micOn:${code}`) !== "false";
-    const wantCam = sessionStorage.getItem(`camOn:${code}`) !== "false";
-    // Clean up after reading — no longer needed
-    sessionStorage.removeItem(`micOn:${code}`);
-    sessionStorage.removeItem(`camOn:${code}`);
+    const wantMic = wantMicRef.current;
+    const wantCam = wantCamRef.current;
 
     async function initMedia() {
       try {
@@ -117,8 +127,9 @@ export default function MeetingRoomPage() {
         // Apply pre-join preferences immediately
         s.getAudioTracks().forEach((t) => (t.enabled = wantMic));
         s.getVideoTracks().forEach((t) => (t.enabled = wantCam));
-        if (!wantMic) setMicOn(false);
-        if (!wantCam) setCamOn(false);
+        // Always sync UI state with actual track state (fixes Strict Mode mismatch)
+        setMicOn(wantMic);
+        setCamOn(wantCam);
         streamRef.current = s;
         setStream(s);
       } catch (err) {
@@ -132,12 +143,11 @@ export default function MeetingRoomPage() {
             s.getTracks().forEach((t) => t.stop());
             return;
           }
-          // Apply mic pref; cam is already off (no video track)
           s.getAudioTracks().forEach((t) => (t.enabled = wantMic));
-          if (!wantMic) setMicOn(false);
+          setMicOn(wantMic);
+          setCamOn(false); // No video track acquired
           streamRef.current = s;
           setStream(s);
-          setCamOn(false);
         } catch (err2) {
           console.warn("Could not acquire audio either:", err2);
         }
@@ -178,6 +188,7 @@ export default function MeetingRoomPage() {
         streamRef.current?.getTracks().forEach((t) => t.stop());
         sessionStorage.removeItem(`participant:${code}`);
         toast.info("The host ended this meeting");
+        router.refresh();
         router.push("/");
         return;
       }
@@ -238,6 +249,7 @@ export default function MeetingRoomPage() {
       await leaveParticipant(participantId);
     } catch {}
     sessionStorage.removeItem(`participant:${code}`);
+    router.refresh();
     router.push("/");
   }
 
@@ -249,6 +261,7 @@ export default function MeetingRoomPage() {
       await endMeeting(code, participantId);
     } catch {}
     sessionStorage.removeItem(`participant:${code}`);
+    router.refresh();
     router.push("/");
   }
 
